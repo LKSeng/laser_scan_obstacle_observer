@@ -35,7 +35,6 @@ bool pnpoly(const float& x, const float& y, const geometry_msgs::Polygon& poly) 
     return is_odd;
 }
 
-
 class LaserScanObstacleObserver {
 public:
     LaserScanObstacleObserver(ros::NodeHandle& nh, ros::NodeHandle& pnh);
@@ -47,6 +46,7 @@ protected:
     tf2_ros::Buffer buffer_;
     tf2_ros::TransformListener tf2_;
     sensor_msgs::LaserScan::ConstPtr laser_scan_ptr_;
+    geometry_msgs::PolygonStamped::ConstPtr footprint_polygon_ptr_;
 
     ros::Subscriber laserscan_subscriber_;
     ros::Subscriber footprint_polygon_subscriber_;
@@ -54,6 +54,9 @@ protected:
     ros::Publisher footprint_pub_;
     ros::Publisher is_obstructed_pub_;
 
+    ros::Timer publish_updates_;
+
+    void timerPublishUpdateCallBack(const ros::TimerEvent& event);
     void laserScanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg);
     void footprintCallBack(const geometry_msgs::PolygonStamped::ConstPtr& msg);
     bool checkScanIn2DFootPrint(const geometry_msgs::PolygonStamped& poly);
@@ -69,24 +72,38 @@ LaserScanObstacleObserver::LaserScanObstacleObserver(ros::NodeHandle& nh, ros::N
 
     laserscan_subscriber_ = nh_.subscribe("scan", 1, &LaserScanObstacleObserver::laserScanCallBack, this);
     footprint_polygon_subscriber_ = nh_.subscribe("move_base/global_costmap/footprint", 1, &LaserScanObstacleObserver::footprintCallBack, this);
+
+    publish_updates_ = nh.createTimer(ros::Duration(1.0 / 10.0), &LaserScanObstacleObserver::timerPublishUpdateCallBack, this);
   }
 
-void LaserScanObstacleObserver::laserScanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg) {
-    target_frame_ = msg->header.frame_id;
+void LaserScanObstacleObserver::timerPublishUpdateCallBack(const ros::TimerEvent& event) {
+    if (!footprint_polygon_ptr_) {
+        ROS_WARN("Footprint not published yet!");
+        return;
+    }
 
-    laser_scan_ptr_ = msg;
-}
+    if (!laser_scan_ptr_) {
+        ROS_WARN("Scan was not published yet!");
+        return;
+    }
 
-void LaserScanObstacleObserver::footprintCallBack(const geometry_msgs::PolygonStamped::ConstPtr& msg) {
+    if (ros::Time::now() - footprint_polygon_ptr_->header.stamp > ros::Duration(1.0)) {
+        ROS_WARN("Footprint was not updated for more than 1s");
+    }
+
+    if (ros::Time::now() - laser_scan_ptr_->header.stamp > ros::Duration(1.0)) {
+        ROS_WARN("Scan was not updated for more than 1s");
+    }
+
     std_msgs::Bool is_obstructed_msg;
     geometry_msgs::TransformStamped map_to_base_link_tf;
     geometry_msgs::PolygonStamped polygon_out;
-    polygon_out.polygon.points.resize(msg->polygon.points.size());
-    polygon_out.header = msg->header;
+    polygon_out.polygon.points.resize(footprint_polygon_ptr_->polygon.points.size());
+    polygon_out.header = footprint_polygon_ptr_->header;
     polygon_out.header.frame_id = target_frame_;
 
     try {
-        map_to_base_link_tf = buffer_.lookupTransform(target_frame_, msg->header.frame_id, ros::Time(0), ros::Duration(0.2));
+        map_to_base_link_tf = buffer_.lookupTransform(target_frame_, footprint_polygon_ptr_->header.frame_id, ros::Time(0), ros::Duration(0.2));
     }
     catch (tf2::TransformException &ex) {
       ROS_WARN("Failure %s\n", ex.what()); //Print exception which was caught
@@ -96,11 +113,11 @@ void LaserScanObstacleObserver::footprintCallBack(const geometry_msgs::PolygonSt
     // I have to transform them one by one because, to my knowledge, the default tf2
     // library does not support one shot transformation of geometry_msgs::Polygon
     try {
-        for (size_t i = 0; i < msg->polygon.points.size(); i++) {
+        for (size_t i = 0; i < footprint_polygon_ptr_->polygon.points.size(); i++) {
             geometry_msgs::Point t_in, t_out;
-            t_in.x = msg->polygon.points[i].x;
-            t_in.y = msg->polygon.points[i].y;
-            t_in.z = msg->polygon.points[i].z;
+            t_in.x = footprint_polygon_ptr_->polygon.points[i].x;
+            t_in.y = footprint_polygon_ptr_->polygon.points[i].y;
+            t_in.z = footprint_polygon_ptr_->polygon.points[i].z;
             tf2::doTransform<geometry_msgs::Point>(t_in, t_out, map_to_base_link_tf);
             polygon_out.polygon.points[i].x = t_out.x;
             polygon_out.polygon.points[i].y = t_out.y;
@@ -120,6 +137,16 @@ void LaserScanObstacleObserver::footprintCallBack(const geometry_msgs::PolygonSt
 
     is_obstructed_pub_.publish(is_obstructed_msg);
     footprint_pub_.publish(polygon_out);
+}
+
+void LaserScanObstacleObserver::laserScanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg) {
+    target_frame_ = msg->header.frame_id;
+
+    laser_scan_ptr_ = msg;
+}
+
+void LaserScanObstacleObserver::footprintCallBack(const geometry_msgs::PolygonStamped::ConstPtr& msg) {
+    footprint_polygon_ptr_ = msg;
 }
 
 bool LaserScanObstacleObserver::checkScanIn2DFootPrint(const geometry_msgs::PolygonStamped& poly) {
