@@ -50,7 +50,6 @@ protected:
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
 
-    std::string target_frame_;
     tf2_ros::Buffer buffer_;
     tf2_ros::TransformListener tf2_;
     sensor_msgs::LaserScan::ConstPtr laser_scan_ptr_;
@@ -74,7 +73,7 @@ protected:
 };
 
 LaserScanObstacleObserver::LaserScanObstacleObserver(ros::NodeHandle& nh, ros::NodeHandle& pnh): 
-    nh_(nh), pnh_(pnh), tf2_(buffer_),  target_frame_("base_link") {
+    nh_(nh), pnh_(pnh), tf2_(buffer_) {
     pnh_.param<float>("footprint_padding", footprint_padding_, 0.5);
 
     footprint_pub_ = pnh_.advertise<geometry_msgs::PolygonStamped>("new_poly", 1000, true);
@@ -110,10 +109,10 @@ void LaserScanObstacleObserver::timerPublishUpdateCallBack(const ros::TimerEvent
     geometry_msgs::PolygonStamped polygon_out;
     polygon_out.polygon.points.resize(footprint_polygon_ptr_->polygon.points.size());
     polygon_out.header = footprint_polygon_ptr_->header;
-    polygon_out.header.frame_id = target_frame_;
+    polygon_out.header.frame_id = laser_scan_ptr_->header.frame_id;
 
     try {
-        map_to_base_link_tf = buffer_.lookupTransform(target_frame_, footprint_polygon_ptr_->header.frame_id, ros::Time(0), ros::Duration(0.2));
+        map_to_base_link_tf = buffer_.lookupTransform(laser_scan_ptr_->header.frame_id, footprint_polygon_ptr_->header.frame_id, ros::Time(0), ros::Duration(0.2));
     }
     catch (tf2::TransformException &ex) {
       ROS_WARN("Failure %s\n", ex.what()); //Print exception which was caught
@@ -152,8 +151,6 @@ void LaserScanObstacleObserver::timerPublishUpdateCallBack(const ros::TimerEvent
 }
 
 void LaserScanObstacleObserver::laserScanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg) {
-    target_frame_ = msg->header.frame_id;
-
     laser_scan_ptr_ = msg;
 }
 
