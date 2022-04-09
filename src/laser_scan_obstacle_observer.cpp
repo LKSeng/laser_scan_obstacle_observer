@@ -8,13 +8,21 @@
 #include "tf2_ros/transform_listener.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 
-/*
-* The SVG defines the even–odd rule by saying:
-* This rule determines the "insideness" of a point on the canvas by drawing a ray
-* from that point to infinity in any direction and counting the number of path
-* segments from the given shape that the ray crosses. If this number is odd, the
-* point is inside; if even, the point is outside.
-*/
+/**
+ * @brief Same as sign(x) but returns 0 if x is 0.
+**/
+inline double sign0(double x) {
+  return x < 0.0 ? -1.0 : (x > 0.0 ? 1.0 : 0.0);
+}
+
+/**
+ * @brief Checks if a point is in a polygon.
+ * The SVG defines the even–odd rule by saying:
+ * This rule determines the "insideness" of a point on the canvas by drawing a ray
+ * from that point to infinity in any direction and counting the number of path
+ * segments from the given shape that the ray crosses. If this number is odd, the
+ * point is inside; if even, the point is outside.
+**/
 bool pnpoly(const float& x, const float& y, const geometry_msgs::Polygon& poly) {
     bool is_odd = false;
 
@@ -47,6 +55,7 @@ protected:
     tf2_ros::TransformListener tf2_;
     sensor_msgs::LaserScan::ConstPtr laser_scan_ptr_;
     geometry_msgs::PolygonStamped::ConstPtr footprint_polygon_ptr_;
+    float footprint_padding_;
 
     ros::Subscriber laserscan_subscriber_;
     ros::Subscriber footprint_polygon_subscriber_;
@@ -59,13 +68,14 @@ protected:
     void timerPublishUpdateCallBack(const ros::TimerEvent& event);
     void laserScanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg);
     void footprintCallBack(const geometry_msgs::PolygonStamped::ConstPtr& msg);
-    bool checkScanIn2DFootPrint(const geometry_msgs::PolygonStamped& poly);
-    bool checkScanIn2DFootPrint(const geometry_msgs::Polygon& poly);
+    void padFootprintPolygon(geometry_msgs::Polygon& poly);
+    bool checkScanIn2DFootprint(const geometry_msgs::PolygonStamped& poly_stamped);
+    bool checkScanIn2DFootprint(const geometry_msgs::Polygon& poly);
 };
 
 LaserScanObstacleObserver::LaserScanObstacleObserver(ros::NodeHandle& nh, ros::NodeHandle& pnh): 
     nh_(nh), pnh_(pnh), tf2_(buffer_),  target_frame_("base_link") {
-    //pnh_.param("costmap_sources", topics_string_, std::string("map1 map2"));
+    pnh_.param<float>("footprint_padding", footprint_padding_, 0.5);
 
     footprint_pub_ = pnh_.advertise<geometry_msgs::PolygonStamped>("new_poly", 1000, true);
     is_obstructed_pub_ = pnh_.advertise<std_msgs::Bool>("is_obstructed", 1000, true);
@@ -129,7 +139,9 @@ void LaserScanObstacleObserver::timerPublishUpdateCallBack(const ros::TimerEvent
       return;
     }
 
-    if (checkScanIn2DFootPrint(polygon_out)) {
+    padFootprintPolygon(polygon_out.polygon);
+
+    if (checkScanIn2DFootprint(polygon_out)) {
         is_obstructed_msg.data = true;
     } else {
         is_obstructed_msg.data = false;
@@ -149,12 +161,23 @@ void LaserScanObstacleObserver::footprintCallBack(const geometry_msgs::PolygonSt
     footprint_polygon_ptr_ = msg;
 }
 
-bool LaserScanObstacleObserver::checkScanIn2DFootPrint(const geometry_msgs::PolygonStamped& poly) {
+void LaserScanObstacleObserver::padFootprintPolygon(geometry_msgs::Polygon& poly) {
+    {
+    // pad footprint in place
+    for (unsigned int i = 0; i < poly.points.size(); i++)
+    {
+        poly.points[i].x += sign0(poly.points[i].x) * footprint_padding_;
+        poly.points[i].y += sign0(poly.points[i].y) * footprint_padding_;
+    }
+    }
+}
+
+bool LaserScanObstacleObserver::checkScanIn2DFootprint(const geometry_msgs::PolygonStamped& poly_stamped) {
     bool scan_point_in_polygon = false;
     float curr_ang = laser_scan_ptr_->angle_min;
 
     for (std::vector<float>::const_iterator it = laser_scan_ptr_->ranges.begin(); it != laser_scan_ptr_->ranges.end(); it++) {
-        scan_point_in_polygon = pnpoly(*it*cos(curr_ang), *it*sin(curr_ang), poly.polygon);
+        scan_point_in_polygon = pnpoly(*it*cos(curr_ang), *it*sin(curr_ang), poly_stamped.polygon);
         curr_ang += laser_scan_ptr_->angle_increment;
         if (scan_point_in_polygon) {
             return true;
@@ -163,7 +186,7 @@ bool LaserScanObstacleObserver::checkScanIn2DFootPrint(const geometry_msgs::Poly
     return false;
 }
 
-bool LaserScanObstacleObserver::checkScanIn2DFootPrint(const geometry_msgs::Polygon& poly) {
+bool LaserScanObstacleObserver::checkScanIn2DFootprint(const geometry_msgs::Polygon& poly) {
     bool scan_point_in_polygon = false;
     float curr_ang = laser_scan_ptr_->angle_min;
 
