@@ -121,7 +121,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -129,17 +129,21 @@ include_directories(
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/laser_scan_obstacle_observer.cpp
 # )
+add_library(laser_scan_obstacle_observer
+  src/laser_scan_obstacle_observer.cpp
+)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(laser_scan_obstacle_observer laser_scan_obstacle_observer_gencfg)
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/laser_scan_obstacle_observer_node.cpp)
-add_executable(laser_scan_obstacle_observer src/laser_scan_obstacle_observer.cpp)
+add_executable(laser_scan_obstacle_observer_node src/laser_scan_obstacle_observer_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -150,13 +154,12 @@ add_executable(laser_scan_obstacle_observer src/laser_scan_obstacle_observer.cpp
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(laser_scan_obstacle_observer laser_scan_obstacle_observer_gencfg)
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
-target_link_libraries(laser_scan_obstacle_observer ${catkin_LIBRARIES})
+target_link_libraries(laser_scan_obstacle_observer_node laser_scan_obstacle_observer ${catkin_LIBRARIES})
 
 #############
 ## Install ##
