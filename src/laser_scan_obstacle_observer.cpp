@@ -62,8 +62,10 @@ protected:
     ros::Publisher footprint_pub_;
     ros::Publisher is_obstructed_pub_;
 
+    ros::Timer publish_when_ready_;
     ros::Timer publish_updates_;
 
+    void timerCheckReadyCallBack(const ros::TimerEvent& event);
     void timerPublishUpdateCallBack(const ros::TimerEvent& event);
     void laserScanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg);
     void footprintCallBack(const geometry_msgs::PolygonStamped::ConstPtr& msg);
@@ -82,20 +84,27 @@ LaserScanObstacleObserver::LaserScanObstacleObserver(ros::NodeHandle& nh, ros::N
     laserscan_subscriber_ = nh_.subscribe("scan", 1, &LaserScanObstacleObserver::laserScanCallBack, this);
     footprint_polygon_subscriber_ = nh_.subscribe("move_base/global_costmap/footprint", 1, &LaserScanObstacleObserver::footprintCallBack, this);
 
-    publish_updates_ = nh.createTimer(ros::Duration(1.0 / 10.0), &LaserScanObstacleObserver::timerPublishUpdateCallBack, this);
+    publish_when_ready_ = nh.createTimer(ros::Rate(10.0), &LaserScanObstacleObserver::timerCheckReadyCallBack, this, false, true);
+    publish_updates_ = nh.createTimer(ros::Rate(10.0), &LaserScanObstacleObserver::timerPublishUpdateCallBack, this, false, false);
   }
 
-void LaserScanObstacleObserver::timerPublishUpdateCallBack(const ros::TimerEvent& event) {
+void LaserScanObstacleObserver::timerCheckReadyCallBack(const ros::TimerEvent& event) {
     if (!footprint_polygon_ptr_) {
-        ROS_WARN("Footprint not published yet!");
-        return;
+        ROS_WARN_THROTTLE(2.0, "Footprint not published yet!");
     }
 
     if (!laser_scan_ptr_) {
-        ROS_WARN("Scan was not published yet!");
-        return;
+        ROS_WARN_THROTTLE(2.0, "Scan was not published yet!");
     }
 
+    // start if both are received at least once
+    if (laser_scan_ptr_ and footprint_polygon_ptr_) {
+        publish_updates_.start();
+        publish_when_ready_.stop();
+    }
+}
+
+void LaserScanObstacleObserver::timerPublishUpdateCallBack(const ros::TimerEvent& event) {
     if (ros::Time::now() - footprint_polygon_ptr_->header.stamp > ros::Duration(1.0)) {
         ROS_WARN("Footprint was not updated for more than 1s");
     }
