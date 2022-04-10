@@ -1,3 +1,5 @@
+#include "laser_scan_obstacle_observer/LaserScanObstacleObserverConfig.h"
+#include "dynamic_reconfigure/server.h"
 
 #include "ros/ros.h"
 #include "geometry_msgs/PolygonStamped.h"
@@ -50,6 +52,9 @@ protected:
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
 
+    dynamic_reconfigure::Server<laser_scan_obstacle_observer::LaserScanObstacleObserverConfig> dynamic_config_server_;
+    dynamic_reconfigure::Server<laser_scan_obstacle_observer::LaserScanObstacleObserverConfig>::CallbackType dynamic_config_callback_;
+
     tf2_ros::Buffer buffer_;
     tf2_ros::TransformListener tf2_;
     sensor_msgs::LaserScan::ConstPtr laser_scan_ptr_;
@@ -65,6 +70,7 @@ protected:
     ros::Timer publish_when_ready_;
     ros::Timer publish_updates_;
 
+    void dynamicReconfigureCallBack(laser_scan_obstacle_observer::LaserScanObstacleObserverConfig &config, uint32_t level);
     void timerCheckReadyCallBack(const ros::TimerEvent& event);
     void timerPublishUpdateCallBack(const ros::TimerEvent& event);
     void laserScanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg);
@@ -76,7 +82,10 @@ protected:
 
 LaserScanObstacleObserver::LaserScanObstacleObserver(ros::NodeHandle& nh, ros::NodeHandle& pnh): 
     nh_(nh), pnh_(pnh), tf2_(buffer_) {
-    pnh_.param<float>("footprint_padding", footprint_padding_, 0.5);
+    dynamic_config_callback_ = boost::bind(&LaserScanObstacleObserver::dynamicReconfigureCallBack, this, _1, _2);
+    dynamic_config_server_.setCallback(dynamic_config_callback_);
+
+    pnh_.param<float>("footprint_padding", footprint_padding_, 0.1);
 
     footprint_pub_ = pnh_.advertise<geometry_msgs::PolygonStamped>("new_poly", 1000, true);
     is_obstructed_pub_ = pnh_.advertise<std_msgs::Bool>("is_obstructed", 1000, true);
@@ -87,6 +96,10 @@ LaserScanObstacleObserver::LaserScanObstacleObserver(ros::NodeHandle& nh, ros::N
     publish_when_ready_ = nh.createTimer(ros::Rate(10.0), &LaserScanObstacleObserver::timerCheckReadyCallBack, this, false, true);
     publish_updates_ = nh.createTimer(ros::Rate(10.0), &LaserScanObstacleObserver::timerPublishUpdateCallBack, this, false, false);
   }
+
+void LaserScanObstacleObserver::dynamicReconfigureCallBack(laser_scan_obstacle_observer::LaserScanObstacleObserverConfig &config, uint32_t level) {
+    footprint_padding_ = config.footprint_padding;
+}
 
 void LaserScanObstacleObserver::timerCheckReadyCallBack(const ros::TimerEvent& event) {
     if (!footprint_polygon_ptr_) {
