@@ -5,9 +5,9 @@ LaserScanObstacleObserver::LaserScanObstacleObserver(ros::NodeHandle& nh, ros::N
     dynamic_config_callback_ = boost::bind(&LaserScanObstacleObserver::dynamicReconfigureCallBack, this, _1, _2);
     dynamic_config_server_.setCallback(dynamic_config_callback_);
 
-    pnh_.param<float>("footprint_padding", footprint_padding_, 0.1);
+    pnh_.param<float>("footprint_padding", footprint_padding_, 0.0);
 
-    footprint_pub_ = pnh_.advertise<geometry_msgs::PolygonStamped>("new_poly", 1000, true);
+    footprint_pub_ = pnh_.advertise<geometry_msgs::PolygonStamped>("footprint", 1000, true);
     is_obstructed_pub_ = pnh_.advertise<std_msgs::Bool>("is_obstructed", 1000, true);
 
     laserscan_subscriber_ = nh_.subscribe("scan", 1, &LaserScanObstacleObserver::laserScanCallBack, this);
