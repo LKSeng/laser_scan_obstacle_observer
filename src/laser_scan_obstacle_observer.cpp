@@ -39,11 +39,11 @@ void LaserScanObstacleObserver::timerCheckReadyCallBack(const ros::TimerEvent& e
 
 void LaserScanObstacleObserver::timerPublishUpdateCallBack(const ros::TimerEvent& event) {
     if (ros::Time::now() - footprint_polygon_ptr_->header.stamp > ros::Duration(1.0)) {
-        ROS_WARN("Footprint was not updated for more than 1s");
+        ROS_WARN_THROTTLE(2.0, "Footprint was not updated for more than 1s");
     }
 
     if (ros::Time::now() - laser_scan_ptr_->header.stamp > ros::Duration(1.0)) {
-        ROS_WARN("Scan was not updated for more than 1s");
+        ROS_WARN_THROTTLE(2.0, "Scan was not updated for more than 1s");
     }
 
     std_msgs::Bool is_obstructed_msg;
