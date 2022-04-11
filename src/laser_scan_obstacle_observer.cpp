@@ -101,13 +101,11 @@ void LaserScanObstacleObserver::footprintCallBack(const geometry_msgs::PolygonSt
 }
 
 void LaserScanObstacleObserver::padFootprintPolygon(geometry_msgs::Polygon& poly) {
-    {
     // pad footprint in place
     for (unsigned int i = 0; i < poly.points.size(); i++)
     {
         poly.points[i].x += sign0(poly.points[i].x) * footprint_padding_;
         poly.points[i].y += sign0(poly.points[i].y) * footprint_padding_;
-    }
     }
 }
 
